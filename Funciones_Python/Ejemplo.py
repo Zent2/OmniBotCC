@@ -1,13 +1,13 @@
 import udp_robot
 import robotat
 import time
-
+vel=400
 # tcp_connection = robotat.robotat_connect()
 
 udp_robot.robot_connect()
 
 udp_robot.robot_set_ustep(32)
-udp_robot.robot_set_velocities([1, -1, 1, -1])
+udp_robot.robot_set_velocities([0, vel, 0, 0])
 udp_robot.robot_start()
 
 
