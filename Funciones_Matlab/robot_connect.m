@@ -4,6 +4,7 @@ function robot_connect()
     global u esp32_ip esp32_port
 
     if isempty(u)
+        %Robotat
         esp32_ip = "192.168.50.222";  % Estos 2 datos están así en el ESP32 del robot
         esp32_port = 12345;
 

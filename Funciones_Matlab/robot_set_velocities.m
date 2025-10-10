@@ -21,6 +21,7 @@ function robot_set_velocities(rpm_vector)
 
     for i = 1:4
         rpm = abs(rpm_vector(i));
+        rpm=round(rpm);
         dir = 'CW';
         if rpm_vector(i) < 0
             dir = 'CCW';
@@ -32,12 +33,12 @@ function robot_set_velocities(rpm_vector)
         % Enviar dirección
         comando_dir = sprintf('m%d_dir=%s', i-1, dir);
         robot_send_WiFi(comando_dir);
-        %pause(0.05);  % Pausa para evitar saturación
+        pause(0.005);  % Pausa para evitar saturación
 
         % Enviar RPM
         comando_rpm = sprintf('m%d_rpm=%d', i-1, rpm);
         robot_send_WiFi(comando_rpm);
-        %pause(0.05);
+        pause(0.005);
     end
 
     fprintf('Velocidades configuradas para los 4 motores vía WiFi.\n');

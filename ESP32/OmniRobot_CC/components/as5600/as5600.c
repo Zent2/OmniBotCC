@@ -1,7 +1,9 @@
 /**
  * @file as5600.c
  * @author Christian Campos (cam21760@uvg.edu.gt)
- * @brief This file contains the implementation of the AS5600 encoder reading function.
+ * @brief This file contains the implementation of the AS5600 encoder.
+ * Has functions for reading the encoder's position (I2C and ADC) and 
+ * configuration.
  * @version 0.1
  * @date 2025-06-24
  *
@@ -14,6 +16,7 @@
 #include "driver/adc.h" // ADC library for reading analog values
 #include "driver/i2c.h"
 #include "driver/i2c_master.h"
+#include <string.h>
 
 #define AS5600_ADDR 0x36 // I2C address of the AS5600 encoder
 #define I2C_MASTER_TIMEOUT_MS 1000 // Timeout for I2C operations in milliseconds
@@ -76,7 +79,7 @@ float as5600_read_adc(adc1_channel_t channel, uint8_t samples)
 
 //-------------------------------I2C Functions----------------------------------
 
-static void 
+void 
 as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *dev_handle)
 {
     // Initialize the I2C bus
@@ -99,23 +102,49 @@ as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *de
     ESP_ERROR_CHECK(i2c_master_bus_add_device(*bus_handle, &dev_config, dev_handle));
     //ESP_LOGI("AS5600", "I2C bus initialized for AS5600 encoder");
 }
-// Read a byte from the AS5600 I2C register
-static esp_err_t
+// Read as many bytes from the AS5600 I2C register
+static esp_err_t 
 read_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, uint8_t *data, size_t len)
 {
     return i2c_master_transmit_receive(dev_handle, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
 // Write a byte to the AS5600 I2C register 
-static esp_err_t 
-write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, uint8_t data)
+static esp_err_t
+write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, const uint8_t *data, size_t len)
 {
-    uint8_t write_buf[2] = {reg_addr, data}; // The packet must have an address followed by the data
-    return i2c_master_transmit(dev_handle, write_buf, sizeof(write_buf), I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    if (data == NULL || len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Prepare TX buffer = [reg_addr, data[0], data[1], ...] */
+    size_t tx_len = len + 1;
+
+    /* Use a small stack buffer when possible to avoid malloc */
+    uint8_t stack_buf[16];
+    uint8_t *tx = stack_buf;
+    uint8_t *heap_buf = NULL;
+
+    if (tx_len > sizeof(stack_buf)) {
+        /* If tx_len is large, allocate */
+        heap_buf = (uint8_t *)malloc(tx_len);
+        if (heap_buf == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+        tx = heap_buf;
+    }
+
+    tx[0] = reg_addr;
+    memcpy(tx + 1, data, len);
+
+    esp_err_t err = i2c_master_transmit(dev_handle, tx, tx_len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+
+    if (heap_buf) free(heap_buf);
+    return err;
 }
 
 // Read the ZMCO_REG register
-static uint8_t
+uint8_t
 read_zmco_register(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t zmco_data;
@@ -124,7 +153,7 @@ read_zmco_register(i2c_master_dev_handle_t dev_handle)
 }
 
 // Read the ZPOS_REG register
-static uint16_t
+uint16_t
 read_zpos_register(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t zpos_data[2] = {0};
@@ -133,7 +162,7 @@ read_zpos_register(i2c_master_dev_handle_t dev_handle)
 }
 
 // Read the MANG_REG register
-static uint16_t 
+uint16_t 
 read_mang_register(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t mang_data[2] = {0};
@@ -142,7 +171,7 @@ read_mang_register(i2c_master_dev_handle_t dev_handle)
 }
 
 // Read the CONF_REG register
-static uint16_t
+uint16_t
 read_conf_register(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t conf_data[2] = {0};
@@ -151,7 +180,7 @@ read_conf_register(i2c_master_dev_handle_t dev_handle)
 }
 
 // Read the STATUS_REG register
-static uint8_t
+uint8_t
 read_status_register(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t status = 0;
@@ -159,7 +188,7 @@ read_status_register(i2c_master_dev_handle_t dev_handle)
     return status;
 }
 // Read the RAW_ANGLE register
-static float
+float
 read_raw_angle(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t raw_angle_data[2] = {0};
@@ -170,8 +199,34 @@ read_raw_angle(i2c_master_dev_handle_t dev_handle)
 
 
 // Write to the BURN_REG register
-static void
+esp_err_t
 write_burn_register(i2c_master_dev_handle_t dev_handle, uint8_t command)
 {
-    write_as5600_register(dev_handle, BURN_REG, command);
+    return write_as5600_register(dev_handle, BURN_REG, &command, 1);
 }
+
+
+// Write a 16-bit value to ZPOS (MSB -> LSB)
+esp_err_t 
+write_zpos_register(i2c_master_dev_handle_t dev_handle, uint16_t value)
+{
+    uint8_t buf[2] = { (uint8_t)(value >> 8), (uint8_t)(value & 0xFF) };
+    return write_as5600_register(dev_handle, ZPOS_REG_MSB, buf, 2);
+}
+
+// Write a 16-bit value to MANG (MSB -> LSB)
+esp_err_t 
+write_mang_register(i2c_master_dev_handle_t dev_handle, uint16_t value)
+{
+    uint8_t buf[2] = { (uint8_t)(value >> 8), (uint8_t)(value & 0xFF) };
+    return write_as5600_register(dev_handle, MANG_REG_MSB, buf, 2);
+}
+
+// Write a 16-bit value to CONF (MSB -> LSB)
+esp_err_t 
+write_conf_register(i2c_master_dev_handle_t dev_handle, uint16_t value)
+{
+    uint8_t buf[2] = { (uint8_t)(value >> 8), (uint8_t)(value & 0xFF) };
+    return write_as5600_register(dev_handle, CONF_REG_MSB, buf, 2);
+}
+

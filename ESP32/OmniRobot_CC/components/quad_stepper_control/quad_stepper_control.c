@@ -25,6 +25,7 @@
 //------------------------------External Variables------------------------------
 // These variables must be defined in the main code main.c and here as externs:
 // Fixed variables
+extern const gpio_num_t enable_pin; // Pin to enable/disable all motors
 extern const gpio_num_t step_pins[4]; // STEP pins for 4 motors
 extern const gpio_num_t dir_pins[4]; // Direction (DIR) pins for 4 motors 
 extern const gpio_num_t ms_pins[3]; // Microstepping pins (MS1, MS2, MS3) 
@@ -32,7 +33,7 @@ extern const uint16_t steps_per_rev_base; // Base steps per revolution
 // Global Variables
 extern volatile uint8_t microstepping; // Microstepping level (1, 2, 4, 8, 16, 32)
 extern volatile uint16_t rpm[4]; // Rotation speed in RPM for each motor
-extern volatile int16_t rpm_error[4]; // Error in RPM for each motor
+extern volatile float rpm_error[4]; // Error in RPM for each motor
 extern volatile bool active_motors[4]; // Motor state (active or not)
 extern volatile bool direction_cw[4]; // Rotation direction for each motor 
 extern TaskHandle_t hMotorControlTaskHandle;
@@ -108,7 +109,7 @@ quad_stepper_set_step(const gpio_num_t ms_pins[], uint8_t microstepping);
  * @param motorIndex Motor index (0–3).
  **/
 static void 
-update_timer_interval(uint8_t motorIndex, int error);
+update_timer_interval(uint8_t motorIndex, float error);
 
 /**
  * @brief Calculates the half period (in µs) for the given motor, according to rpm and microstepping.
@@ -117,7 +118,7 @@ update_timer_interval(uint8_t motorIndex, int error);
  * @return Half period in microseconds, or 0 if rpm≤0.
  **/
 static uint64_t 
-calculate_half_period_us(uint8_t motorIndex, int error);
+calculate_half_period_us(uint8_t motorIndex, float error);
 
 /**
  * @brief Timer interrupt service routine (generates toggling of the STEP pin).
@@ -150,15 +151,19 @@ quad_stepper_gpio_setup(const gpio_num_t dir_pins[],
     for (int i = 0; i < MICROSTEPPING_PINS; i++)
     {
         // Configure microstepping pins
+        //gpio_reset_pin(ms_pins[i]);
         gpio_set_direction(ms_pins[i], GPIO_MODE_OUTPUT);
         // Initialize the microstepping pins to low
         // gpio_set_level(ms_pins[i], 0);
     }
     // Configure microstepping pins (MS1, MS2, MS3)
-    quad_stepper_set_step(ms_pins, microstepping);
+    //quad_stepper_set_step(ms_pins, microstepping); //Disabled 
     // Configure direction and step pins for 4 motors
+    gpio_reset_pin(GPIO_NUM_14); //This PIN is SPI CLK, so we reset it first
     for (int i = 0; i < MOTOR_COUNT; i++)
     {
+        //gpio_reset_pin(dir_pins[i]);
+        //gpio_reset_pin(step_pins[i]);
         // Configure direction and step pins
         gpio_set_direction(dir_pins[i], GPIO_MODE_OUTPUT);
         gpio_set_direction(step_pins[i], GPIO_MODE_OUTPUT);
@@ -167,6 +172,8 @@ quad_stepper_gpio_setup(const gpio_num_t dir_pins[],
         gpio_set_level(step_pins[i], 0);
         // configure_timer_for_motor(i);
     }
+    gpio_set_direction(enable_pin, GPIO_MODE_OUTPUT);
+    gpio_set_level(enable_pin, 1); // All motors disable (active low)
     // ESP_LOGI(TAG, "GPIO configured successfully");
     return ESP_OK;
 }
@@ -181,10 +188,10 @@ quad_motor_control_task(void *arg)
     static uint16_t last_rpm[4] = {0};
     static bool last_dir[4] = {false, false, false, false};
     static bool last_activo[4] = {false, false, false, false};
-    static int16_t last_rpm_error[4] = {0};
+    static float last_rpm_error[4] = {0};
     static uint8_t last_microstepping = -1;
     static bool b_update_flag[4] = {false, false, false, false};
-    ;
+
     // Flag to indicate if an update is needed
     // These allow checking if values have changed to avoid unnecessary updates
     while (1)
@@ -214,8 +221,10 @@ quad_motor_control_task(void *arg)
 
             if (direction_cw[i] != last_dir[i])
             {
+                bool invert_dir[4] = {0, 1, 1, 0};
                 last_dir[i] = direction_cw[i];
-                gpio_set_level(dir_pins[i], direction_cw[i] ? 0 : 1);
+                bool dir = direction_cw[i] ^ invert_dir[i]; // Invert direction for motors 1 and 2
+                gpio_set_level(dir_pins[i], dir ? 0 : 1);
             }
 
             if (b_update_flag[i]) // If any value has changed, update the timer
@@ -352,7 +361,7 @@ quad_stepper_set_step(const gpio_num_t ms_pins[], uint8_t microstepping)
 
 
 static void 
-update_timer_interval(uint8_t motorIndex, int error) // Update the timer
+update_timer_interval(uint8_t motorIndex, float error) // Update the timer
 {
     timer_motor_map_t *map = &timer_map[motorIndex]; // Get the motor mapping
     // Calculate the new half period in microseconds
@@ -366,6 +375,7 @@ update_timer_interval(uint8_t motorIndex, int error) // Update the timer
     if (newHalf == 0 || !active_motors[motorIndex])
     {
         gpio_set_level(step_pins[motorIndex], 0);
+        gpio_set_level(enable_pin, 1); // Disable all motors (active low)
         step_state[motorIndex] = false;
     }
 
@@ -376,26 +386,56 @@ update_timer_interval(uint8_t motorIndex, int error) // Update the timer
         // If the motor is active, restart the timer to emit STEP pulses
         step_state[motorIndex] = false;            // Reset the step state of the motor
         gpio_set_level(step_pins[motorIndex], 0); // Ensure the STEP pin is low
+        gpio_set_level(enable_pin, 0); // Enable all motors (active low)
         timer_start(map->group, map->timer);      // Start the timer
     }
 }
 
 static uint64_t
-calculate_half_period_us(uint8_t motorIndex, int error)
+calculate_half_period_us(uint8_t motorIndex, float error)
 {
-
     uint16_t spb = steps_per_rev_base; // Base steps per revolution
-    uint8_t ms = microstepping;    // Microstepping level (1, 2, 4, 8, 16, 32)
-    uint16_t r = rpm[motorIndex];   // Rotation speed in RPM for the given motor
-    if (r <= 0)
-        return 0;  // If speed is 0 or less, do not emit pulse
-    r = r + error; // Adjust the RPM with the error value
-    // Total steps per revolution considering microstepping
-    uint64_t totalSteps = (uint64_t)spb * ms;
-    // Period in microseconds: 60 seconds/(steps per revolution * RPM)
-    uint64_t periodUs = 60000000ULL / (totalSteps * (uint64_t)r);
-    return periodUs / 2; // Return the half period in microseconds
+    uint8_t ms = microstepping;        // Microstepping level (1,2,4,8,16,32)
+    double r = (double)rpm[motorIndex]; // RPM as double
+
+    // Apply PID error
+    r += (double)error;
+
+    // Safety checks
+    if (spb == 0 || ms == 0) {
+        ESP_LOGW(TAG_TIMER, "Invalid steps_per_rev_base (%u) or microstepping (%u).", (unsigned)spb, (unsigned)ms);
+        return 0;
+    }
+    // If r is NaN or <= 0, the comparison (r > 0.0) will be false -> stop motor
+    if (!(r > 0.0)) {
+        return 0;
+    }
+
+    double totalSteps = (double)spb * (double)ms;
+    double denom = totalSteps * r; // steps * RPM
+
+    // denom must be a positive finite value; (denom > 0.0) is false for NaN and negatives
+    if (!(denom > 0.0)) {
+        ESP_LOGW(TAG_TIMER, "Invalid denominator in period calc: totalSteps=%.0f r=%.6f", totalSteps, r);
+        return 0;
+    }
+
+    double period_us = 60000000.0 / denom; // period in microseconds (floating)
+
+    // period_us must be positive; comparison also filters out NaN
+    if (!(period_us > 0.0)) {
+        ESP_LOGW(TAG_TIMER, "Computed invalid period_us: %.6f", period_us);
+        return 0;
+    }
+
+    uint64_t periodUs_u64 = (uint64_t)(period_us + 0.5); // round
+    if (periodUs_u64 == 0) {
+        return 0;
+    }
+    //ESP_LOGI(TAG_TIMER, "Period Set to: %llu us", periodUs_u64);
+    return periodUs_u64 / 2; // Return the half period in microseconds
 }
+
 
 void
     IRAM_ATTR timer_isr(void *arg)

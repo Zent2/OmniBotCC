@@ -132,6 +132,7 @@ void udp_connect_wifi(bool is_static_ip, bool LED_on)
 {
     // Configure the LED if specified
     if (LED_on) {
+        gpio_reset_pin(led_wifi);
         gpio_set_direction(led_wifi, GPIO_MODE_OUTPUT); // Set LED pin as output
         gpio_set_level(led_wifi, 0); // Turn off LED
     }
@@ -150,7 +151,7 @@ void udp_connect_wifi(bool is_static_ip, bool LED_on)
     // Make sure the static IP does not conflict with other devices
     if (is_static_ip) {
         IP4_ADDR(&ip_info.ip, 192, 168, 50, 222); // ESP32 static IP
-        IP4_ADDR(&ip_info.gw, 192, 168, 50, 1);
+        IP4_ADDR(&ip_info.gw, 192, 168, 50, 1); // Gateway IP
         IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
         esp_netif_set_ip_info(my_sta, &ip_info);
     } 

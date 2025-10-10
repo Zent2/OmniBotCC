@@ -50,21 +50,26 @@
 //------------------------------Custom Libraries--------------------------------
 // #include "gpio_stepper_motor.h" // GPIO configuration for steppers (Custom)
 #include "quad_stepper_control.h" // Library for stepper motor control (Custom)
-#include "udp_wifi.h"      // Library for WiFi configuration (Custom)
-#include "as5600.h" // Library for AS5600 encoder handling (Custom)
+#include "udp_wifi.h"             // Library for WiFi configuration (Custom)
+#include "as5600.h"               // Library for AS5600 encoder handling (Custom)
 // static const char *TAG = "TIMER_STEPPER"; // TAG name for logging
+
+#define CONFIG_ESP_TIMER_TASK_AFFINITY 1 // CPU core affinity for ESP timer task
 //-------------------------------Pin Definitions--------------------------------
 // quad_stepper_control pins
+
 // Stepper motors
 // MS1,MS2,MS3
-const gpio_num_t ms_pins[3] = {GPIO_NUM_2, GPIO_NUM_2, GPIO_NUM_2}; 
+const gpio_num_t ms_pins[3] = {GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC};
+//Enable pin (shared for all motors)
+const gpio_num_t enable_pin=GPIO_NUM_23; // Pin to enable/disable all motors
 // Motor pins
 // GPIO 25, 26, 19, 18 for Step and Dir pins of motors 0 and 1
 // GPIO 27, 14, 16, 4 for Step and Dir pins of motors 2 and 3
 const gpio_num_t step_pins[4] = {
-    GPIO_NUM_25, GPIO_NUM_19, GPIO_NUM_27, GPIO_NUM_16};
+    GPIO_NUM_26, GPIO_NUM_19, GPIO_NUM_16, GPIO_NUM_14};
 const gpio_num_t dir_pins[4] = {
-    GPIO_NUM_26, GPIO_NUM_18, GPIO_NUM_14, GPIO_NUM_4};
+    GPIO_NUM_25, GPIO_NUM_18, GPIO_NUM_4, GPIO_NUM_27};
 
 // AS5600 pins (ADC channels for reading angles)
 // ADC1 channels for AS5600 encoders
@@ -88,30 +93,28 @@ const adc1_channel_t channels[4] = {
 
 //---------------------------Parameters and Variables---------------------------
 // Wifi
-const uint16_t udp_port = 12345;              // UDP port for receiving commands
-const gpio_num_t led_wifi = GPIO_NUM_23; // LED pin to indicate WiFi status
+const uint16_t udp_port = 12345;         // UDP port for receiving commands
+const gpio_num_t led_wifi = GPIO_NUM_2; // LED pin to indicate WiFi status
 
-//quad_stepper_control parameters and variables
-// Motor parameters
+// quad_stepper_control parameters and variables
+//  Motor parameters
 const uint16_t steps_per_rev_base = 200; // Steps per revolution (Datasheet)
-//Usually 200 for 1.8° stepper motors or 400 for 0.9° stepper motors
+// Usually 200 for 1.8° stepper motors or 400 for 0.9° stepper motors
 const uint16_t rpm_max = 400; // Maximum allowed RPM for the motors
 // Volatile variables for motor control
 //(this variables are shared between tasks and ISR)
-volatile uint8_t microstepping = 32; // ustepping level (only 8 and 32 supported)
-volatile uint16_t rpm[4] = {10, 10, 10, 10};   // Rotation speed in RPM
-volatile uint16_t rpm_error[4] = {0, 0, 0, 0}; // Error in RPM 
+volatile uint8_t microstepping = 32;         // ustepping level (only 8 and 32 supported)
+volatile uint16_t rpm[4] = {10, 10, 10, 10}; // Rotation speed in RPM
+volatile float rpm_error[4] = {0, 0, 0, 0};  // Error in RPM
 volatile bool direction_cw[4] = {true, false, false, true};
 // Rotation direction for each motor (true = CW, false = CCW)
 volatile bool active_motors[4] = {false, false, false, false};
 // Motor state (active or not)
 
-//const int32_t esp_timer_period_us = 125000; // Timer period in microseconds
-// 125000 us = 125 ms = 8 Hz (8 times per second)
 const int32_t esp_timer_period_us = 50000; // Timer period in microseconds
-// 2000 us = 2 ms = 500 Hz (500 times per second)
-//as5600 parameters and variables
-const uint8_t samples = 10; // Number of samples to average
+// 50000 us = 50 ms = 20 Hz (20 times per second)
+// as5600 parameters and variables
+const uint8_t samples = 15;             // Number of samples to average
 volatile float last_angle[4] = {0.00f}; // Previous angle per motor
 // volatile int64_t last_time_us[4] = {0};
 volatile uint8_t print_counter = 0; // Counter to print every 2s
@@ -121,11 +124,17 @@ volatile float integral_error[4] = {0.00f};
 volatile float prev_error[4] = {0.00f};
 
 // PID parameters (must be tuned, shared for all motors)
-const float Kp = 1.0;
-const float Ki = 0.5;
-const float Kd = 0.1;
+//const float Kp = 0.1; 
+//const float Ki = 0.4;
+//const float Kd = 0.0;
+
+volatile float Kp = 0.04;
+volatile float Ki = 0.002;
+volatile float Kd = 0.0002;
 
 TaskHandle_t hMotorControlTaskHandle = NULL;
+// Nueva tarea para PID
+TaskHandle_t hPIDTaskHandle = NULL;
 
 static const char *TAG = "APP_MAIN";
 
@@ -141,6 +150,9 @@ static void
 periodic_timer_callback(void *arg); // Forward declaration
 
 static void
+pid_task(void *arg); // Forward declaration
+
+static void
 process_command(const char *buf); // Forward declaration
 
 void my_message_handler(const uint8_t *data, uint32_t len,
@@ -153,7 +165,7 @@ void init(void)
 {
     // GPIO configuration (Dir, Step and MS)
     if (quad_stepper_gpio_setup(dir_pins, step_pins, ms_pins, direction_cw,
-                                 microstepping) != ESP_OK)
+                                microstepping) != ESP_OK)
     {
         ESP_LOGE(TAG, "Pin configuration failed");
     }
@@ -195,99 +207,156 @@ void init(void)
     // AS5600 ADC configuration
     for (int32_t i = 0; i < 4; i++)
     {
+        gpio_reset_pin(as5600_pins[i]);
+        gpio_set_direction(as5600_pins[i], GPIO_MODE_INPUT);
         as5600_adc_init(channels[i]);
-        last_angle[i] =as5600_read_adc(channels[i], samples);
+        last_angle[i] = as5600_read_adc(channels[i], samples);
+        
     }
+    // Create PID task
+    xTaskCreatePinnedToCore(pid_task, "pid_task", 4096,
+                            NULL, 6, &hPIDTaskHandle, 1);
 }
 
+// periodic_timer_callback: solo calcula RPM y notifica a PID_task
 static void
 periodic_timer_callback(void *arg)
 {
     (void)arg;
-    static const float Ts = esp_timer_period_us / 1000000.0f;  // in seconds
-    static const int32_t printing = 2000000 / esp_timer_period_us; // every ~2 s
+    static const float Ts = esp_timer_period_us / 1000000.0f;      // in seconds
+    static const int32_t printing = 1000000 / esp_timer_period_us; // every ~1 s
+    return; // Desactivo el cálculo de RPM (por ahora)
     for (int32_t i = 0; i < 4; i++)
     {
-        if (active_motors[i])
+        if (active_motors[i] && rpm[i] > 0)
         {
             // 1) Read the angle from the AS5600 encoder
             float current_angle = as5600_read_adc(channels[i], samples);
 
-            // 2) "Signed" calculation according to direction:
-            //    CW: Δ = current - last
-            //   CCW: Δ = last    - current
-            float delta = direction_cw[i]
-                              ? (current_angle - last_angle[i])
-                              : (last_angle[i] - current_angle);
+            // Determine if both angles are inside the "valid" window [20, 270]
+            bool last_in_window = (last_angle[i] >= 20.0f) && (last_angle[i] <= 270.0f);
+            bool curr_in_window = (current_angle >= 20.0f) && (current_angle <= 270.0f);
 
-            // 3) Wrap‑around minimal (+/−360)
-            // 4) Absolutize Δθ 
-            if (delta < 0.0f)
+            if (last_in_window && curr_in_window)
             {
-                delta = -delta;
-            }
+                // 2) "Signed" calculation according to direction:
+                //    CW: Δ = current - last
+                //   CCW: Δ = last    - current
+                float delta = direction_cw[i]
+                                  ? (current_angle - last_angle[i])
+                                  : (last_angle[i] - current_angle);
 
+                if (delta < 0.0f)
+                {
+                    delta += 360.0f;
+                }
+
+                float rpm_calculated = 0.0f;
+                if (Ts > 0.0f)
+                {
+                    rpm_calculated = (delta / 360.0f) * (60.0f / Ts);
+                }
+                else
+                {
+                    rpm_calculated = 0.0f;
+                }
+
+                if (!(rpm_calculated >= 0.0f))
+                {
+                    rpm_calculated = 0.0f;
+                }
+                else if (rpm_calculated > 1.25f * (float)rpm[i])
+                {
+                    rpm_calculated = 1.25f * (float)rpm[i];
+                }
+                else if (rpm_calculated < 0.75f * (float)rpm[i])
+                {
+                    rpm_calculated = 0.75f * (float)rpm[i];
+                }
+
+                // Store measured RPM for PID task
+                rpm_error[i] = rpm_calculated;
+
+                if (print_counter >= (uint8_t)(printing - 1))
+                {
+                    ESP_LOGI(TAG,
+                             "Motor %d: CurrentAngle: %.2f°, δθ=%.2f°, Ts=%.3fs, RPM_obj=%d, RPM_med=%.2f (calculated)",
+                             (int)i, current_angle, delta, Ts, (int)rpm[i], rpm_calculated);
+                }
+            }
+            else
+            {
+                rpm_error[i] = 0.0f;
+                if (print_counter >= (uint8_t)(printing - 1))
+                {
+                    ESP_LOGI(TAG, "Motor %d: RPM skipped (angles out of [20,270]). last=%.2f°, curr=%.2f°",
+                             (int)i, last_angle[i], current_angle);
+                }
+            }
             last_angle[i] = current_angle;
-
-            // 4) RPM, always positive
-            float rpm_calculated = (delta / 360.0f) * (60.0f / Ts);
-
-            // 5) Logging every ~2 s
-            if (print_counter >= (uint8_t)(printing - 1))
-            {
-
-                ESP_LOGI(TAG,
-                         "Motor%d δθ=%.2f°, Ts=%.3fs, RPM_obj=%d, RPM_med=%.2f",
-                         (int)i, delta, Ts, (int)rpm[i], rpm_calculated);
-            }
-            //TODO: check PID control (int, float, etc)
-            // 6) PID control
-            // Calculate the error
-            float error = rpm[i] - rpm_calculated;
-            // Proportional term
-            float P = Kp * error;
-            // Integral term
-            integral_error[i] += error * Ts;
-            // Derivative term
-            float derivative = (error - prev_error[i]) / Ts;
-            prev_error[i] = error; // Update the previous error
-            // Calculate the control signal
-            float control_signal = P + Ki * integral_error[i] + Kd * derivative;
-
-            // If the control signal is lower than the tolerance, set it to 0
-            if ((control_signal < 0.2f) && (control_signal > -0.2f))
-            {
-                control_signal = 0.0f; 
-            }
-            // Limit the control signal to the maximum RPM
-            if ((int16_t)control_signal > rpm_max)
-            {
-                control_signal = rpm_max; // Limit the control signal to max RPM
-            }
-            // Update the RPM error
-            rpm_error[i] = (int16_t)control_signal;
-
-        }
-
-        else
-        {
-            if (print_counter >= (uint8_t)(printing - 1))
-            {
-
-                ESP_LOGI(TAG, "Motor %d is inactive. Last angle: %.2f°",
-                     (int)i, last_angle[i]);
-            }
         }
     }
 
-    // Update print counter
     print_counter++;
     if (print_counter >= (uint8_t)printing)
     {
         print_counter = 0;
     }
-    // 7) Notify the motor control task to update the timers
-    //xTaskNotifyGive(hMotorControlTaskHandle); // Notify the motor control task
+
+    // Notifica la tarea PID
+    xTaskNotifyGive(hPIDTaskHandle);
+}
+
+
+
+static void
+pid_task(void *arg)
+{
+    static const float Ts = esp_timer_period_us / 1000000.0f; // in seconds
+    while (1)
+    {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Espera notificación del timer
+
+        for (int32_t i = 0; i < 4; i++)
+        {
+            if (active_motors[i] && rpm[i] > 0)
+            {
+                float rpm_calculated = rpm_error[i]; // rpm_error ahora almacena el RPM medido
+                float error = rpm[i] - rpm_calculated;
+                float P = Kp * error;
+
+                // Anti-windup: Clamp integral_error[i] to avoid excessive accumulation
+                integral_error[i] += error * Ts;
+                if (integral_error[i] > 1.5 * rpm[i]) integral_error[i] = 1.5 * rpm[i];
+                if (integral_error[i] < -1.5 * rpm[i]) integral_error[i] = -1.5 * rpm[i];
+
+                float derivative = 0.0f;
+                if (Ts > 0.0f)
+                {
+                    derivative = (error - prev_error[i]) / Ts;
+                }
+
+                prev_error[i] = error;
+
+                float control_signal = P + Ki * integral_error[i] + Kd * derivative;
+
+                if ((control_signal < (0.05f * rpm[i])) && (control_signal > -(0.05f * rpm[i])))
+                {
+                    control_signal = 0.0f;
+                }
+
+                // rpm_error ahora almacena la señal de control para el motor control task
+                rpm_error[i] = control_signal;
+            }
+            else
+            {
+                rpm_error[i] = 0.0f;
+            }
+        }
+
+        // Notifica la tarea de control de motores
+        xTaskNotifyGive(hMotorControlTaskHandle);
+    }
 }
 
 static void
@@ -295,6 +364,7 @@ process_command(const char *buf)
 {
     ESP_LOGI(TAG, "Command received: %s", buf);
 
+    #if 0
     if (strncmp(buf, "step=", 5) == 0)
     {
         int32_t mode = atoi(buf + 5);
@@ -308,7 +378,9 @@ process_command(const char *buf)
             ESP_LOGW(TAG, "Invalid microstepping: %d", (int)mode);
         }
     }
-    else if (strcmp(buf, "start") == 0)
+    #endif
+    
+    if (strcmp(buf, "start") == 0)
     {
         for (int32_t i = 0; i < 4; i++)
         {
@@ -325,6 +397,21 @@ process_command(const char *buf)
             // update_timer_interval(i);
         }
         ESP_LOGI(TAG, "All motors stopped");
+    }
+    else if (strncmp(buf, "Kp=", 3) == 0)
+    {
+        Kp = atof(buf + 3);
+        ESP_LOGI(TAG, "Kp set to: %.2f", Kp);
+    }
+    else if (strncmp(buf, "Ki=", 3) == 0)
+    {
+        Ki = atof(buf + 3);
+        ESP_LOGI(TAG, "Ki set to: %.2f", Ki);
+    }
+    else if (strncmp(buf, "Kd=", 3) == 0)
+    {
+        Kd = atof(buf + 3);
+        ESP_LOGI(TAG, "Kd set to: %.2f", Kd);
     }
     else
     {
@@ -389,15 +476,15 @@ process_command(const char *buf)
             }
         }
     }
-    if (hMotorControlTaskHandle != NULL) {
+    if (hMotorControlTaskHandle != NULL)
+    {
         xTaskNotifyGive(hMotorControlTaskHandle);
     }
 }
 
 // @todo: Attach this handler to the UDP server library
 // This function is called when a message is received via UDP
-void 
-my_message_handler(const uint8_t *data, uint32_t len,
+void my_message_handler(const uint8_t *data, uint32_t len,
                         const struct sockaddr *src_addr,
                         void *arg)
 {
@@ -451,6 +538,9 @@ void app_main(void)
     /*xTaskCreatePinnedToCore(motor_control_task, "motor_control_task", 4096,
                             NULL, 5, &hMotorControlTaskHandle, 1);*/
 
+    
+    
     // System startup message
     ESP_LOGI(TAG, "System initialized. Waiting for commands...");
 }
+

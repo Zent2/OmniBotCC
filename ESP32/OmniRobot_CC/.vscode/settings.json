@@ -5,12 +5,19 @@
   "idf.openOcdConfigs": [
     "board/esp32-wrover-kit-3.3v.cfg"
   ],
-  "idf.portWin": "COM3",
+  "idf.portWin": "COM17",
   "idf.toolsPathWin": "c:\\ESP\\tools",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32"
   },
   "files.associations": {
-    "freertos.h": "c"
-  }
+    "freertos.h": "c",
+    "sockets.h": "c",
+    "adc.h": "c",
+    "esp_wifi.h": "c",
+    "udp_wifi.h": "c",
+    "quad_stepper_control.h": "c"
+  },
+  "idf.flashType": "UART",
+  "C_Cpp.errorSquiggles": "disabled"
 }

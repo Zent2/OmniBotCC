@@ -47,7 +47,7 @@ as5600_read_adc(adc1_channel_t channel, uint8_t samples);
  * @param address I2C address of the AS5600 encoder (default is 0x36).
  */
 
-static void 
+void 
 as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *dev_handle);
 
 /**
@@ -69,15 +69,16 @@ read_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, uint8
  * @param data Data byte to write.
  */
 static esp_err_t
-write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, uint8_t data);
+write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, const uint8_t *data, size_t len);
 
-/**
+/**s
  * @brief Reads the ZMCO_REG register.
  * 
  * @param dev_handle I2C device handle for the AS5600 encoder.
  * @return uint8_t Value read from the ZMCO_REG register.
  */
-static uint8_t
+
+uint8_t
 read_zmco_register(i2c_master_dev_handle_t dev_handle);
 
 /**
@@ -86,7 +87,7 @@ read_zmco_register(i2c_master_dev_handle_t dev_handle);
  * @param dev_handle I2C device handle for the AS5600 encoder.
  * @return uint16_t Value read from the ZPOS_REG register.
  */
-static uint16_t
+uint16_t
 read_zpos_register(i2c_master_dev_handle_t dev_handle);
 
 /**
@@ -95,7 +96,7 @@ read_zpos_register(i2c_master_dev_handle_t dev_handle);
  * @param dev_handle I2C device handle for the AS5600 encoder.
  * @return uint16_t Value read from the MANG_REG register.
  */
-static uint16_t 
+uint16_t 
 read_mang_register(i2c_master_dev_handle_t dev_handle);
 
 /** 
@@ -104,7 +105,7 @@ read_mang_register(i2c_master_dev_handle_t dev_handle);
  * @param dev_handle I2C device handle for the AS5600 encoder.
  * @return uint16_t Value read from the CONF_REG register.
  */
-static uint16_t
+uint16_t
 read_conf_register(i2c_master_dev_handle_t dev_handle);
 
 /** 
@@ -114,7 +115,7 @@ read_conf_register(i2c_master_dev_handle_t dev_handle);
  * @return uint8_t Value read from the STATUS_REG register.
  */
 
-static uint8_t
+uint8_t
 read_status_register(i2c_master_dev_handle_t dev_handle);
 
 /**
@@ -123,7 +124,7 @@ read_status_register(i2c_master_dev_handle_t dev_handle);
  * @param dev_handle I2C device handle for the AS5600 encoder.
  * @return float Raw angle value read from the RAW_ANGLE register.
  */
-static float
+float
 read_raw_angle(i2c_master_dev_handle_t dev_handle);
 
 
@@ -133,8 +134,39 @@ read_raw_angle(i2c_master_dev_handle_t dev_handle);
  * @param dev_handle I2C device handle for the AS5600 encoder.
  * @param command Command byte to write to the BURN_REG register.
  */
-static void
+esp_err_t
 write_burn_register(i2c_master_dev_handle_t dev_handle, uint8_t command);
+
+/**
+ * @brief Writes a 16-bit value to the ZPOS register.
+ * 
+ * @param dev_handle I2C device handle for the AS5600 encoder.
+ * @param value 16-bit value to write to the ZPOS register.
+ * @return esp_err_t 
+ */
+
+esp_err_t 
+write_zpos_register(i2c_master_dev_handle_t dev_handle, uint16_t value);
+
+/**
+ * @brief Writes a 16-bit value to the MANG register.
+ * 
+ * @param dev_handle I2C device handle for the AS5600 encoder.
+ * @param value 16-bit value to write to the MANG register.
+ * @return esp_err_t 
+ */
+esp_err_t 
+write_mang_register(i2c_master_dev_handle_t dev_handle, uint16_t value);
+
+/**
+ * @brief Writes a 16-bit value to the CONF register.
+ * 
+ * @param dev_handle I2C device handle for the AS5600 encoder.
+ * @param value 16-bit value to write to the CONF register.
+ * @return esp_err_t 
+ */
+esp_err_t 
+write_conf_register(i2c_master_dev_handle_t dev_handle, uint16_t value);
 
 
 #endif // AS5600_H

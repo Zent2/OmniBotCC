@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "OmniRobot_CC",
-    "project_version":    "dae5315-dirty",
+    "project_version":    "a9ba2f4-dirty",
     "project_path":       "C:/Users/chris/OneDrive - UVG/UVG-ChrisLaptop/Proyecto de Graduacion-Tesis/Carpeta Final/ESP32/OmniRobot_CC",
     "idf_path":           "C:/Users/chris/esp/v5.4.1/esp-idf",
     "build_dir":          "C:/Users/chris/OneDrive - UVG/UVG-ChrisLaptop/Proyecto de Graduacion-Tesis/Carpeta Final/ESP32/OmniRobot_CC/build",

@@ -15,8 +15,10 @@
 #define UDP_WIFI_H
 
 //---------------------------Definitions and Structures---------------------------
+
 #define SSID "Robotat" // Replace with your WiFi SSID
 #define PASSWORD "iemtbmcit116" // Replace with your WiFi password
+
 
 struct sockaddr;
 typedef void (*udp_rx_callback_t)(
