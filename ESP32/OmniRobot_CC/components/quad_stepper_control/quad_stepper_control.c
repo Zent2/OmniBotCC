@@ -4,7 +4,7 @@
  * @brief Library for configuring and controlling 4 stepper motor with DRV8825 
  * using ESP-IDF. The stepper motors are controlled using hardware timers
  * to achieve precise movement and speed control.
- * @version 0.1
+ * @version 1.0
  * @date 2025
  *
  * @copyright Copyright (c) 2025
@@ -19,8 +19,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 //----------------------------Custom Libraries----------------------------------
-#include "quad_stepper_control.h" // Library to handle stepper motor timers (custom)
-// #include "esp_log.h" // ESP-IDF logging library (for debug messages)
+#include "quad_stepper_control.h" // Library to handle stepper motor timers 
 
 //------------------------------External Variables------------------------------
 // These variables must be defined in the main code main.c and here as externs:
@@ -31,7 +30,7 @@ extern const gpio_num_t dir_pins[4]; // Direction (DIR) pins for 4 motors
 extern const gpio_num_t ms_pins[3]; // Microstepping pins (MS1, MS2, MS3) 
 extern const uint16_t steps_per_rev_base; // Base steps per revolution
 // Global Variables
-extern volatile uint8_t microstepping; // Microstepping level (1, 2, 4, 8, 16, 32)
+extern volatile uint8_t microstepping; // Microstepping (1, 2, 4, 8, 16, 32)
 extern volatile uint16_t rpm[4]; // Rotation speed in RPM for each motor
 extern volatile float rpm_error[4]; // Error in RPM for each motor
 extern volatile bool active_motors[4]; // Motor state (active or not)
@@ -56,13 +55,13 @@ static timer_motor_map_t timer_map[4] = {
     { TIMER_GROUP_1, TIMER_1, 3 } // Map motor 3 to timer 1 of group 1
 };
 
-//----------------------------Function Prototypes--------------------------------
+//----------------------------Function Prototypes-------------------------------
 //Local function prototypes
 //Global function prototypes in header file quad_stepper_control.h
 /**
  * @brief Task that controls the motors based on the current values of rpms, ms, etc.
- * @details This task runs on core 1 and is notified from other parts of the code
- * when there are changes in the motor parameters.
+ * @details This task runs on core 1 and is notified from other parts of the 
+ * code when there are changes in the motor parameters.
  */
 static void 
 quad_motor_control_task(void *arg);
@@ -101,7 +100,8 @@ static void
 quad_stepper_set_step(const gpio_num_t ms_pins[], uint8_t microstepping);
 
 /**
- * @brief Updates the timer alarm value according to rpm and active state of the motor.
+ * @brief Updates the timer alarm value according to rpm and active state of 
+ * the motor.
  * 
  * Pauses the timer, recalculates the half period, and if the motor is active,
  * restarts the timer to emit STEP pulses.
@@ -112,7 +112,8 @@ static void
 update_timer_interval(uint8_t motorIndex, float error);
 
 /**
- * @brief Calculates the half period (in µs) for the given motor, according to rpm and microstepping.
+ * @brief Calculates the half period (in µs) for the given motor, 
+ * according to rpm and microstepping.
  * 
  * @param motorIndex Motor index (0–3).
  * @return Half period in microseconds, or 0 if rpm≤0.
@@ -129,7 +130,7 @@ static void
 IRAM_ATTR timer_isr(void *arg);
 
 
-//--------------------------------Global Functions-------------------------------
+//--------------------------------Global Functions------------------------------
 
 void 
 quad_stepper_init()
@@ -137,8 +138,8 @@ quad_stepper_init()
     // Create a task to configure the timers on core 1
     xTaskCreatePinnedToCore(timer_config_task,
                             "timer_config_task", 2048, NULL, 5, NULL, 1);
-    xTaskCreatePinnedToCore(quad_motor_control_task, "quad_motor_control_task", 4096,
-                            NULL, 5, &hMotorControlTaskHandle, 1);
+    xTaskCreatePinnedToCore(quad_motor_control_task, "quad_motor_control_task",
+        4096, NULL, 5, &hMotorControlTaskHandle, 1);
     // ESP_LOGI(TAG_TIMER, "Timer configuration task created on core 1");
 };
 
@@ -160,6 +161,7 @@ quad_stepper_gpio_setup(const gpio_num_t dir_pins[],
     //quad_stepper_set_step(ms_pins, microstepping); //Disabled 
     // Configure direction and step pins for 4 motors
     gpio_reset_pin(GPIO_NUM_14); //This PIN is SPI CLK, so we reset it first
+    gpio_reset_pin(GPIO_NUM_23);
     for (int i = 0; i < MOTOR_COUNT; i++)
     {
         //gpio_reset_pin(dir_pins[i]);
@@ -173,7 +175,7 @@ quad_stepper_gpio_setup(const gpio_num_t dir_pins[],
         // configure_timer_for_motor(i);
     }
     gpio_set_direction(enable_pin, GPIO_MODE_OUTPUT);
-    gpio_set_level(enable_pin, 1); // All motors disable (active low)
+    //gpio_set_level(enable_pin, 1); // All motors disable (active low)
     // ESP_LOGI(TAG, "GPIO configured successfully");
     return ESP_OK;
 }
@@ -223,7 +225,8 @@ quad_motor_control_task(void *arg)
             {
                 bool invert_dir[4] = {0, 1, 1, 0};
                 last_dir[i] = direction_cw[i];
-                bool dir = direction_cw[i] ^ invert_dir[i]; // Invert direction for motors 1 and 2
+                bool dir = direction_cw[i] ^ invert_dir[i]; // Invert direction
+                // for motors 1 and 2
                 gpio_set_level(dir_pins[i], dir ? 0 : 1);
             }
 
@@ -234,17 +237,17 @@ quad_motor_control_task(void *arg)
                 b_update_flag[i] = false; // Reset the update flag
             }
         }
-
+    #if 0 
         if (microstepping != last_microstepping)
         {
             last_microstepping = microstepping; // Update the last microstepping
             // Set the microstepping pins according to the new value
-            quad_stepper_set_step(ms_pins, microstepping);
+            //quad_stepper_set_step(ms_pins, microstepping);
             for (int i = 0; i < 4; i++)
             {
                 update_timer_interval(i, 0); // Update all the timers
             }
-#if 0 
+
             if (quad_stepper_set_step(ms_pins, microstepping) != ESP_OK) 
             {
                 ESP_LOGE("CONTROL_TASK", "Error setting microstepping: %d", 
@@ -258,8 +261,9 @@ quad_motor_control_task(void *arg)
                 for (int i = 0; i < 4; i++)
                     update_timer_interval(i,0); // Update all the timers 
             }
-#endif
+
         }
+    #endif
     }
     vTaskDelete(NULL); // Delete the task when it finishes
 }
@@ -275,8 +279,9 @@ timer_config_task(void *arg)
     vTaskDelete(NULL); // Delete the task after configuring the timers
 }
 
+// Configure a timer for each motor
 static void 
-configure_timer_for_motor(uint8_t motorIndex) // Configure a timer for each motor
+configure_timer_for_motor(uint8_t motorIndex) 
 {
     timer_motor_map_t *map = &timer_map[motorIndex]; // Get the motor mapping
     timer_config_t config = {
@@ -284,7 +289,7 @@ configure_timer_for_motor(uint8_t motorIndex) // Configure a timer for each moto
         .counter_dir = TIMER_COUNT_UP, // Counter in up mode
         .counter_en = TIMER_PAUSE,     // Start the timer in pause
         .alarm_en = TIMER_ALARM_EN,    // Enable timer alarm
-        .auto_reload = true,           // Enable auto-reload (restarts automatically)
+        .auto_reload = true,           // Enable auto-reload (automatically)
         .intr_type = TIMER_INTR_LEVEL, // Set level interrupt
     };
     // Initialize the timer with the configuration
@@ -294,12 +299,13 @@ configure_timer_for_motor(uint8_t motorIndex) // Configure a timer for each moto
     half_period_us[motorIndex] = calculate_half_period_us(motorIndex, 0);
     // Set the timer alarm value; if half period is 0, use 1
     timer_set_alarm_value(map->group, map->timer,
-                          half_period_us[motorIndex] == 0 ? 1 : half_period_us[motorIndex]);
+                          half_period_us[motorIndex] == 0 ? 1 : 
+                          half_period_us[motorIndex]);
     timer_enable_intr(map->group, map->timer); // Enable timer interrupt
     timer_isr_register(map->group, map->timer, // Register the timer ISR
                        timer_isr, (void *)map,
-                       ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_LEVEL1 | ESP_INTR_CPU_AFFINITY_0,
-                       NULL);
+                       ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_LEVEL1 | 
+                       ESP_INTR_CPU_AFFINITY_0, NULL);
 }
 
 static void 
@@ -375,7 +381,7 @@ update_timer_interval(uint8_t motorIndex, float error) // Update the timer
     if (newHalf == 0 || !active_motors[motorIndex])
     {
         gpio_set_level(step_pins[motorIndex], 0);
-        gpio_set_level(enable_pin, 1); // Disable all motors (active low)
+        //gpio_set_level(enable_pin, 1); // Disable all motors (active low)
         step_state[motorIndex] = false;
     }
 
@@ -384,9 +390,9 @@ update_timer_interval(uint8_t motorIndex, float error) // Update the timer
         // Set the new timer alarm value
         timer_set_alarm_value(map->group, map->timer, newHalf);
         // If the motor is active, restart the timer to emit STEP pulses
-        step_state[motorIndex] = false;            // Reset the step state of the motor
+        step_state[motorIndex] = false; // Reset the step state of the motor
         gpio_set_level(step_pins[motorIndex], 0); // Ensure the STEP pin is low
-        gpio_set_level(enable_pin, 0); // Enable all motors (active low)
+        //gpio_set_level(enable_pin, 0); // Enable all motors (active low)
         timer_start(map->group, map->timer);      // Start the timer
     }
 }
@@ -403,7 +409,9 @@ calculate_half_period_us(uint8_t motorIndex, float error)
 
     // Safety checks
     if (spb == 0 || ms == 0) {
-        ESP_LOGW(TAG_TIMER, "Invalid steps_per_rev_base (%u) or microstepping (%u).", (unsigned)spb, (unsigned)ms);
+        ESP_LOGW(TAG_TIMER, 
+            "Invalid steps_per_rev_base (%u) or microstepping (%u).", 
+            (unsigned)spb, (unsigned)ms);
         return 0;
     }
     // If r is NaN or <= 0, the comparison (r > 0.0) will be false -> stop motor
@@ -414,9 +422,12 @@ calculate_half_period_us(uint8_t motorIndex, float error)
     double totalSteps = (double)spb * (double)ms;
     double denom = totalSteps * r; // steps * RPM
 
-    // denom must be a positive finite value; (denom > 0.0) is false for NaN and negatives
+    // denom must be a positive finite value; 
+    // (denom > 0.0) is false for NaN and negatives
     if (!(denom > 0.0)) {
-        ESP_LOGW(TAG_TIMER, "Invalid denominator in period calc: totalSteps=%.0f r=%.6f", totalSteps, r);
+        ESP_LOGW(TAG_TIMER, 
+            "Invalid denominator in period calc: totalSteps=%.0f r=%.6f", 
+            totalSteps, r);
         return 0;
     }
 
@@ -440,10 +451,10 @@ calculate_half_period_us(uint8_t motorIndex, float error)
 void
     IRAM_ATTR timer_isr(void *arg)
 {
-    timer_motor_map_t *map = (timer_motor_map_t *)arg;          // Get the motor map
+    timer_motor_map_t *map = (timer_motor_map_t *)arg; // Get the motor map
     timer_group_clr_intr_status_in_isr(map->group, map->timer); // Clear timer
-    int idx = map->motor_idx;                                   // Get the motor index from the map
-    step_state[idx] = !step_state[idx];                           // Toggle the step state of the motor
-    gpio_set_level(step_pins[idx], step_state[idx]);             // Update the STEP pin
-    timer_group_enable_alarm_in_isr(map->group, map->timer);    // Enable alarm
+    int idx = map->motor_idx; // Get the motor index from the map
+    step_state[idx] = !step_state[idx]; // Toggle the step state of the motor
+    gpio_set_level(step_pins[idx], step_state[idx]); // Update the STEP pin
+    timer_group_enable_alarm_in_isr(map->group, map->timer); // Enable alarm
 }

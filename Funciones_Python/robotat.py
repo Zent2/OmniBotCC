@@ -1,7 +1,18 @@
 # robotat.py
+"""
+Módulo para conectarse al Robotat vía TCP. (Es solo un ejemplo, las 
+funciones reales fueron desarrolladas por otros autores y no están incluidas aquí)
+Autor: Christian Campos
+Versión: 1.0
+Fecha: 2025-10-13
+
+Requisitos:
+ - Python 3.8+
+ - socket
+"""
 
 import socket
-
+ 
 def robotat_connect():
     ip = '192.168.50.200'
     port = 1883

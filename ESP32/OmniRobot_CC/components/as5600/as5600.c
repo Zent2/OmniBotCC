@@ -4,7 +4,7 @@
  * @brief This file contains the implementation of the AS5600 encoder.
  * Has functions for reading the encoder's position (I2C and ADC) and 
  * configuration.
- * @version 0.1
+ * @version 1.0
  * @date 2025-06-24
  *
  * @copyright Copyright (c) 2025
@@ -80,7 +80,8 @@ float as5600_read_adc(adc1_channel_t channel, uint8_t samples)
 //-------------------------------I2C Functions----------------------------------
 
 void 
-as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *dev_handle)
+as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, 
+    i2c_master_dev_handle_t *dev_handle)
 {
     // Initialize the I2C bus
     i2c_master_bus_config_t bus_config = {
@@ -99,19 +100,23 @@ as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *de
         .device_address = AS5600_ADDR,
         .scl_speed_hz = 100000,
     };
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(*bus_handle, &dev_config, dev_handle));
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(*bus_handle, &dev_config, 
+        dev_handle));
     //ESP_LOGI("AS5600", "I2C bus initialized for AS5600 encoder");
 }
 // Read as many bytes from the AS5600 I2C register
 static esp_err_t 
-read_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, uint8_t *data, size_t len)
+read_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, 
+    uint8_t *data, size_t len)
 {
-    return i2c_master_transmit_receive(dev_handle, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    return i2c_master_transmit_receive(dev_handle, &reg_addr, 1, data, len, 
+        I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
 // Write a byte to the AS5600 I2C register 
 static esp_err_t
-write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, const uint8_t *data, size_t len)
+write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, 
+    const uint8_t *data, size_t len)
 {
     if (data == NULL || len == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -137,7 +142,8 @@ write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, cons
     tx[0] = reg_addr;
     memcpy(tx + 1, data, len);
 
-    esp_err_t err = i2c_master_transmit(dev_handle, tx, tx_len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    esp_err_t err = i2c_master_transmit(dev_handle, tx, tx_len, 
+        I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 
     if (heap_buf) free(heap_buf);
     return err;
@@ -157,7 +163,8 @@ uint16_t
 read_zpos_register(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t zpos_data[2] = {0};
-    read_as5600_register(dev_handle, ZPOS_REG_MSB, zpos_data, sizeof(zpos_data));
+    read_as5600_register(dev_handle, ZPOS_REG_MSB, zpos_data, 
+        sizeof(zpos_data));
     return ((uint16_t)((zpos_data[0] << 8) | zpos_data[1]));
 }
 
@@ -166,7 +173,8 @@ uint16_t
 read_mang_register(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t mang_data[2] = {0};
-    read_as5600_register(dev_handle, MANG_REG_MSB, mang_data, sizeof(mang_data));
+    read_as5600_register(dev_handle, MANG_REG_MSB, mang_data, 
+        sizeof(mang_data));
     return ((uint16_t)((mang_data[0] << 8) | mang_data[1]));
 }
 
@@ -175,7 +183,8 @@ uint16_t
 read_conf_register(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t conf_data[2] = {0};
-    read_as5600_register(dev_handle, CONF_REG_MSB, conf_data, sizeof(conf_data));
+    read_as5600_register(dev_handle, CONF_REG_MSB, conf_data, 
+        sizeof(conf_data));
     return ((uint16_t)((conf_data[0] << 8) | conf_data[1]));
 }
 
@@ -192,8 +201,10 @@ float
 read_raw_angle(i2c_master_dev_handle_t dev_handle)
 {
     uint8_t raw_angle_data[2] = {0};
-    read_as5600_register(dev_handle, RAW_ANGLE_MSB, raw_angle_data, sizeof(raw_angle_data));
-    return ((float)((raw_angle_data[0] << 8) | raw_angle_data[1])) / 4096.0f * 360.0f;
+    read_as5600_register(dev_handle, RAW_ANGLE_MSB, raw_angle_data, 
+        sizeof(raw_angle_data));
+    return 
+    ((float)((raw_angle_data[0] << 8) | raw_angle_data[1])) / 4096.0f * 360.0f;
 
 }
 

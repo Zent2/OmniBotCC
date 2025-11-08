@@ -167,11 +167,11 @@ static void interactive_config_task(void *arg)
             else
             {
                 bool md = (status & (1 << 5));
-                printf("   MD (magnet detect): %s\n", md ? "OK" : "NO DETECTADO");
+                printf("MD (magnet detect): %s\n", md ? "OK" : "NO DETECTADO");
                 while (!md)
                 {
-                    printf("   Coloca un imán adecuado y confirma nuevamente.\n");
-                    while (!waitForYes("   ¿Seguir?", 0))
+                    printf("Coloca un imán adecuado y confirma nuevamente.\n");
+                    while (!waitForYes("¿Seguir?", 0))
                     {
                         printf("   Esperando confirmación para continuar...\n");
                         vTaskDelay(pdMS_TO_TICKS(500));
@@ -179,17 +179,19 @@ static void interactive_config_task(void *arg)
                     status = read_status_register(as5600_dev);
                     if (status == 0xFF)
                     {
-                        printf("Error leyendo STATUS_REG (I2C). Abortando paso.\n");
+                        printf("Error leyendo STATUS_REG (I2C). 
+                            Abortando paso.\n");
                         break;
                     }
                     md = (status & (1 << 5));
-                    printf("   MD (magnet detect): %s\n", md ? "OK" : "NO DETECTADO");
+                    printf("MD (magnet detect): %s\n", 
+                        md ? "OK" : "NO DETECTADO");
                 }
             }
         }
         else
         {
-            printf("   Paso 2 saltado.\n");
+            printf("Paso 2 saltado.\n");
         }
 
         // Paso 3: Leer ZMCO
@@ -204,12 +206,12 @@ static void interactive_config_task(void *arg)
             else
             {
                 zmco = r & 0x03;
-                printf("   ZMCO = %u\n", (unsigned)zmco);
+                printf("ZMCO = %u\n", (unsigned)zmco);
             }
         }
         else
         {
-            printf("   Paso 3 saltado.\n");
+            printf("Paso 3 saltado.\n");
         }
 
         if (zmco == 0)
@@ -235,7 +237,7 @@ static void interactive_config_task(void *arg)
                     }
                     else
                     {
-                        printf("   Error reescribiendo CONF\n");
+                        printf("Error reescribiendo CONF\n");
                     }
                 }
 
@@ -255,8 +257,9 @@ static void interactive_config_task(void *arg)
                 if (waitForYes("6) BURN_SETTING (0x40)", 0))
                 {
                     vTaskDelay(pdMS_TO_TICKS(10));
-                    // write BURN_REG with BURN_SETTING_CMD using component helper
-                    if (write_burn_register(as5600_dev, BURN_SETTING_CMD) == ESP_OK)
+                    // write BURN_REG with BURN_SETTING_CMD
+                    if (write_burn_register(as5600_dev, BURN_SETTING_CMD) == 
+                    ESP_OK)
                     {
                         vTaskDelay(pdMS_TO_TICKS(100));
                         printf("   BURN_SETTING enviado\n");
@@ -291,7 +294,7 @@ static void interactive_config_task(void *arg)
         }
         else
         {
-            printf("No se puede configurar nuevamente el AS5600 (ZMCO != 0).\n");
+            printf("No se puede configurar el AS5600 (ZMCO != 0).\n");
         }
 
         // Paso 8 - leer MANG y CONF
@@ -323,7 +326,8 @@ static void interactive_config_task(void *arg)
                 vTaskDelay(pdMS_TO_TICKS(100));
                 uint16_t raw = (uint16_t)(read_raw_angle(as5600_dev) /
                                           360.0f * 4096.0f);
-                // read_raw_angle returns float degrees; convert to raw 12-bit value
+                // read_raw_angle returns float degrees
+                // convert to raw 12-bit value
                 if (raw == 0xFFFF)
                 {
                     printf("Error leyendo RAW_ANGLE (I2C).\n");
@@ -343,7 +347,8 @@ static void interactive_config_task(void *arg)
 
                 if (waitForYes("10) BURN_ANGLE (0x80)", 0))
                 {
-                    if (write_burn_register(as5600_dev, BURN_ANGLE_CMD) == ESP_OK)
+                    if (write_burn_register(as5600_dev, BURN_ANGLE_CMD) 
+                    == ESP_OK)
                         printf("   BURN_ANGLE enviado\n");
                     else
                         printf("   Error enviando BURN_ANGLE\n");
@@ -410,7 +415,7 @@ static void interactive_config_task(void *arg)
         }
         else
         {
-            printf("Tampoco se puede volver a configurar el ángulo 0 (ZMCO >= 3).\n");
+            printf("Tampoco se puede configurar el ángulo 0 (ZMCO >= 3).\n");
         }
 
         printf("\n=== Configuración interactiva finalizada ===\n\n");

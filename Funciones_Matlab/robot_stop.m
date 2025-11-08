@@ -6,4 +6,5 @@ function robot_stop()
     end
     % Inicia todos los motores
     robot_send_WiFi('stop');
+    fprintf('Robot detenido y motores deshabilitados\n');
 end

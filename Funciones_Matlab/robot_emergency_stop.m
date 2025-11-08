@@ -19,7 +19,7 @@ function robot_emergency_stop()
             robot_send_WiFi('stop');
             fprintf('¡Parada de emergencia enviada en el intento %d!\n', attempt);
             sent = true;
-            break;
+            %break;
 
         catch ME
             warning('Error al intentar enviar el comando de parada (intento %d):\n%s', attempt, getReport(ME));

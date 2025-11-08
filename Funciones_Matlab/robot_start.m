@@ -6,4 +6,5 @@ function robot_start()
     end
     % Inicia todos los motores
     robot_send_WiFi('start');
+    fprintf('Robot iniciado y motores habilitados\n');
 end

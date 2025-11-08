@@ -1,5 +1,15 @@
 # udp_robot.py
+"""
+Módulo para controlar el OmniBotCC vía UDP. (Equivalente a las funciones UDP en MATLAB)
+Autor: Christian Campos
+Versión: 1.0
+Fecha: 2025-10-13
 
+Requisitos:
+ - Python 3.8+
+ - socket
+ - time
+"""
 import socket
 import time
 
@@ -107,19 +117,3 @@ def robot_set_velocities(rpm_vector):
 
     print('Velocidades configuradas para los 4 motores vía WiFi.')
 
-
-def robot_set_ustep(ustepping):
-    """
-    Configura el microstepping (resolución de paso).
-
-    Parámetro:
-        ustepping (int): Valor deseado de microstepping (por ejemplo, 1, 2, 4, 8...).
-    """
-    global u, esp32_ip, esp32_port
-
-    if u is None:
-        raise RuntimeError('No hay conexión activa. Llama a robot_connect() primero.')
-
-    comando_ustepping = f"step={ustepping}"
-    u.sendto(comando_ustepping.encode(), (esp32_ip, esp32_port))
-    print(f'Ustepping configurado a {ustepping}.')

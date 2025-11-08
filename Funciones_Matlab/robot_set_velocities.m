@@ -26,6 +26,7 @@ function robot_set_velocities(rpm_vector)
         if rpm_vector(i) < 0
             dir = 'CCW';
         end
+        
 
         % Limitar RPM al máximo permitido por el ESP32
         rpm = min(rpm, 400);
@@ -36,10 +37,13 @@ function robot_set_velocities(rpm_vector)
         pause(0.005);  % Pausa para evitar saturación
 
         % Enviar RPM
-        comando_rpm = sprintf('m%d_rpm=%d', i-1, rpm);
+        comando_rpm = sprintf('m%d_rpm=%2f', i-1, rpm);
         robot_send_WiFi(comando_rpm);
         pause(0.005);
     end
-
+    
     fprintf('Velocidades configuradas para los 4 motores vía WiFi.\n');
+    if rpm_vector==0
+        fprintf('Velocidades configuradas a 0, si quiere detener el robot por completo usar "robot_stop".\n');
+    end
 end

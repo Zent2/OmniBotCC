@@ -13,7 +13,8 @@
  */
 #ifndef AS5600_H
 #define AS5600_H
-//------------------------------External Libraries-------------------------------
+//------------------------------------------------------------------------------
+//------------------------------External Libraries------------------------------
 #include "driver/adc.h"
 #include "driver/i2c.h"
 #include "driver/i2c_master.h"
@@ -48,7 +49,8 @@ as5600_read_adc(adc1_channel_t channel, uint8_t samples);
  */
 
 void 
-as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *dev_handle);
+as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, 
+    i2c_master_dev_handle_t *dev_handle);
 
 /**
  * @brief Reads from the AS5600 I2C register.
@@ -59,7 +61,8 @@ as5600_i2c_init(i2c_master_bus_handle_t *bus_handle, i2c_master_dev_handle_t *de
  * @param len Length of the data to read.
  */
 static esp_err_t
-read_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, uint8_t *data, size_t len);
+read_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, 
+    uint8_t *data, size_t len);
 
 /**
  * @brief Writes to the AS5600 I2C register.
@@ -69,9 +72,10 @@ read_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, uint8
  * @param data Data byte to write.
  */
 static esp_err_t
-write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, const uint8_t *data, size_t len);
+write_as5600_register(i2c_master_dev_handle_t dev_handle, uint8_t reg_addr, 
+    const uint8_t *data, size_t len);
 
-/**s
+/**
  * @brief Reads the ZMCO_REG register.
  * 
  * @param dev_handle I2C device handle for the AS5600 encoder.

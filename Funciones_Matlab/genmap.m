@@ -9,7 +9,7 @@ function map = genmap(obs)
     map(1:10, :) = ones(size(map(1:10, :)));
     map(end-9:end, :) = ones(size(map(1:10, :)));
 
-    obsradius = 20; % en cm
+    obsradius = 22; % en cm
     
     for i = 1:length(obs)
         obsx = round((-obs(i, 1) + width/200) * 100);

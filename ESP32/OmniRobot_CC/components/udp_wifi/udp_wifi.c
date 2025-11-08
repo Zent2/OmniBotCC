@@ -43,7 +43,7 @@ static TaskHandle_t led_blink_task_handle = NULL; // LED blink task handle
 static udp_rx_callback_t g_udp_callback = NULL;
 static void *g_callback_arg = NULL; // Callback and argument for UDP messages
 
-//----------------------------Function Prototypes--------------------------------
+//----------------------------Function Prototypes-------------------------------
 //Local function prototypes
 /**
  * @brief Task to blink the LED indicating WiFi status.
@@ -57,11 +57,12 @@ static void udp_led_blink_task(void *arg); // Task to blink the LED
  * 
  * @param arg Pointer to user data (not used here).
  * @param event_base Event base (WIFI_EVENT or IP_EVENT).
- * @param event_id Event ID (WIFI_EVENT_STA_START, WIFI_EVENT_STA_DISCONNECTED, etc.).
+ * @param event_id Event ID (WIFI_EVENT_STA_START, WIFI_EVENT_STA_DISCONNECTED,
+ *  etc.).
  * @param event_data Pointer to event data (e.g., IP address).
  */
 static void udp_wifi_event_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data); // WiFi event 
+                               int32_t event_id, void *event_data);  
 
 /**
  * @brief UDP server task that listens for incoming messages.
@@ -91,8 +92,8 @@ udp_wifi_event_handler(void *arg, esp_event_base_t event_base,
     // Handle WiFi and IP events
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         if (led_blink_task_handle == NULL) {
-            xTaskCreatePinnedToCore(udp_led_blink_task, "udp_led_blink_task", 2048, 
-                                    NULL, 5, &led_blink_task_handle, 0);
+            xTaskCreatePinnedToCore(udp_led_blink_task, "udp_led_blink_task",
+                2048, NULL, 5, &led_blink_task_handle, 0);
         }
 
         esp_wifi_connect(); // Start connection to AP
@@ -103,8 +104,8 @@ udp_wifi_event_handler(void *arg, esp_event_base_t event_base,
         // Turn off LED and restart blinking
         gpio_set_level(led_wifi, 0); // Turn off LED
         if (led_blink_task_handle == NULL) {
-            xTaskCreatePinnedToCore(udp_led_blink_task, "udp_led_blink_task", 2048, 
-                                    NULL, 5, &led_blink_task_handle, 0);
+            xTaskCreatePinnedToCore(udp_led_blink_task, "udp_led_blink_task",
+                2048, NULL, 5, &led_blink_task_handle, 0);
         }
 
         esp_wifi_connect(); // Retry connection to AP
@@ -188,7 +189,8 @@ void udp_connect_wifi(bool is_static_ip, bool LED_on)
     };
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // Set WiFi to STA mode
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config)); // Apply WiFi config
+    // Apply WiFi config
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config)); 
     ESP_ERROR_CHECK(esp_wifi_start()); // Start WiFi client
     // Start WiFi connection
     ESP_LOGI(TAG_UDP, "WiFi STA started, connecting to %s...", SSID);
